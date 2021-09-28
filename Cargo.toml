@@ -2,9 +2,23 @@
 name = "rustylife"
 version = "0.1.0"
 edition = "2021"
+autobins = false
+default-run = "rustylife"
+description = "Local-first habits, goals and progress reviews"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = []
+simulation = ["dep:rand", "dep:raylib4-sys"]
+
+[[bin]]
+name = "rustylife"
+path = "src/bin/rustylife.rs"
+
+[[bin]]
+name = "smoothlife"
+path = "src/main.rs"
+required-features = ["simulation"]
 
 [dependencies]
-rand = "0.8.5"
-raylib4-sys = "0.1.2"
+rand = { version = "0.8.5", optional = true }
+raylib4-sys = { version = "0.1.2", optional = true }
