@@ -20,5 +20,8 @@ path = "src/main.rs"
 required-features = ["simulation"]
 
 [dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 rand = { version = "0.8.5", optional = true }
 raylib4-sys = { version = "0.1.2", optional = true }
