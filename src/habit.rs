@@ -45,6 +45,17 @@ impl Habit {
     pub fn is_archived(&self) -> bool {
         self.archived
     }
+    /// Returns false for an already-recorded day; duplicates never inflate progress.
+    pub fn check_in(&mut self, date: Date) -> Result<bool> {
+        if self.archived {
+            return Err("cannot check in an archived habit".into());
+        }
+        if date < self.created {
+            return Err("check-in cannot predate habit creation".into());
+        }
+        Ok(self.checkins.insert(date))
+    }
+
     pub fn checkins(&self) -> &BTreeSet<Date> {
         &self.checkins
     }
