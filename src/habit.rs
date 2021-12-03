@@ -56,6 +56,11 @@ impl Habit {
         Ok(self.checkins.insert(date))
     }
 
+    /// Correct a check-in, including historical records of archived habits.
+    pub fn undo(&mut self, date: Date) -> bool {
+        self.checkins.remove(&date)
+    }
+
     pub fn checkins(&self) -> &BTreeSet<Date> {
         &self.checkins
     }
