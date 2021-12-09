@@ -61,6 +61,14 @@ impl Habit {
         self.checkins.remove(&date)
     }
 
+    pub fn rename(&mut self, name: &str) -> Result<()> {
+        self.name = valid_name(name)?;
+        Ok(())
+    }
+    pub fn set_archived(&mut self, archived: bool) {
+        self.archived = archived;
+    }
+
     pub fn checkins(&self) -> &BTreeSet<Date> {
         &self.checkins
     }
