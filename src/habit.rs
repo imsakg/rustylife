@@ -69,6 +69,42 @@ impl Habit {
         self.archived = archived;
     }
 
+    /// Consecutive completed days ending today, or yesterday if today is unfinished.
+    pub fn current_streak(&self, today: Date) -> usize {
+        let anchor = if self.checkins.contains(&today) {
+            Some(today)
+        } else {
+            today.add_days(-1).ok()
+        };
+        let Some(mut cursor) = anchor else {
+            return 0;
+        };
+        let mut streak = 0;
+        while self.checkins.contains(&cursor) {
+            streak += 1;
+            match cursor.add_days(-1) {
+                Ok(previous) => cursor = previous,
+                Err(_) => break,
+            }
+        }
+        streak
+    }
+
+    pub fn longest_streak(&self, through: Date) -> usize {
+        let mut previous: Option<Date> = None;
+        let (mut current, mut longest) = (0, 0);
+        for &date in self.checkins.range(..=through) {
+            current = if previous.is_some_and(|p| p.days_until(date) == 1) {
+                current + 1
+            } else {
+                1
+            };
+            longest = longest.max(current);
+            previous = Some(date);
+        }
+        longest
+    }
+
     pub fn checkins(&self) -> &BTreeSet<Date> {
         &self.checkins
     }
