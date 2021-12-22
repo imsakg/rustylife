@@ -20,6 +20,21 @@ pub(crate) fn valid_name(name: &str) -> Result<String> {
     Ok(name.to_owned())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Completion {
+    pub completed: usize,
+    pub eligible: usize,
+}
+impl Completion {
+    pub fn percent(self) -> f64 {
+        if self.eligible == 0 {
+            0.0
+        } else {
+            self.completed as f64 * 100.0 / self.eligible as f64
+        }
+    }
+}
+
 impl Habit {
     pub fn new(id: u64, name: &str, created: Date) -> Result<Self> {
         if id == 0 {
@@ -103,6 +118,23 @@ impl Habit {
             previous = Some(date);
         }
         longest
+    }
+
+    pub fn completion(&self, start: Date, end: Date) -> Result<Completion> {
+        if start > end {
+            return Err("start date must not follow end date".into());
+        }
+        let start = start.max(self.created);
+        if start > end {
+            return Ok(Completion {
+                completed: 0,
+                eligible: 0,
+            });
+        }
+        Ok(Completion {
+            completed: self.checkins.range(start..=end).count(),
+            eligible: (start.days_until(end) + 1) as usize,
+        })
     }
 
     pub fn checkins(&self) -> &BTreeSet<Date> {
