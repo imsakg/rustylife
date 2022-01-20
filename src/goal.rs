@@ -25,6 +25,21 @@ impl Goal {
             created,
         })
     }
+    pub fn set_progress(&mut self, progress: u64) -> Result<()> {
+        if progress > self.target {
+            return Err("progress cannot exceed target".into());
+        }
+        self.progress = progress;
+        Ok(())
+    }
+    pub fn advance(&mut self, amount: u64) -> Result<()> {
+        self.set_progress(
+            self.progress
+                .checked_add(amount)
+                .ok_or("progress overflow")?,
+        )
+    }
+
     pub fn id(&self) -> u64 {
         self.id
     }
