@@ -11,6 +11,7 @@ pub struct Goal {
     unit: String,
     created: Date,
     due: Option<Date>,
+    milestones: Vec<Milestone>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GoalStatus {
@@ -28,6 +29,20 @@ impl std::fmt::Display for GoalStatus {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Milestone {
+    name: String,
+    done: bool,
+}
+impl Milestone {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn done(&self) -> bool {
+        self.done
+    }
+}
+
 impl Goal {
     pub fn new(id: u64, name: &str, target: u64, unit: &str, created: Date) -> Result<Self> {
         if id == 0 || target == 0 {
@@ -39,6 +54,7 @@ impl Goal {
             target,
             progress: 0,
             due: None,
+            milestones: Vec::new(),
             unit: valid_name(unit)?,
             created,
         })
@@ -76,6 +92,29 @@ impl Goal {
         } else {
             GoalStatus::Active
         }
+    }
+
+    /// Add a named step and return its one-based position.
+    pub fn add_milestone(&mut self, name: &str) -> Result<usize> {
+        let name = valid_name(name)?;
+        if self.milestones.len() >= 100 || self.milestones.iter().any(|m| m.name == name) {
+            return Err("milestone is duplicated or the 100-step limit was reached".into());
+        }
+        self.milestones.push(Milestone { name, done: false });
+        Ok(self.milestones.len())
+    }
+    pub fn set_milestone(&mut self, number: usize, done: bool) -> Result<()> {
+        let index = number
+            .checked_sub(1)
+            .ok_or("milestone numbers start at 1")?;
+        self.milestones
+            .get_mut(index)
+            .ok_or("milestone not found")?
+            .done = done;
+        Ok(())
+    }
+    pub fn milestones(&self) -> &[Milestone] {
+        &self.milestones
     }
 
     pub fn id(&self) -> u64 {
