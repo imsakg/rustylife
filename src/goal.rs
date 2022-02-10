@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// A measurable goal using whole units; progress is always within its target.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Goal {
     id: u64,
     name: String,
@@ -30,6 +31,7 @@ impl std::fmt::Display for GoalStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Milestone {
     name: String,
     done: bool,
@@ -117,6 +119,26 @@ impl Goal {
         &self.milestones
     }
 
+    pub(crate) fn validate(&self) -> Result<()> {
+        if self.id == 0
+            || self.target == 0
+            || self.progress > self.target
+            || valid_name(&self.name)? != self.name
+            || valid_name(&self.unit)? != self.unit
+        {
+            return Err("invalid goal identity, target, progress or name".into());
+        }
+        if self.due.is_some_and(|d| d < self.created) || self.milestones.len() > 100 {
+            return Err("invalid goal deadline or milestone count".into());
+        }
+        let mut names = std::collections::BTreeSet::new();
+        for m in &self.milestones {
+            if valid_name(&m.name)? != m.name || !names.insert(&m.name) {
+                return Err("invalid or duplicated milestone".into());
+            }
+        }
+        Ok(())
+    }
     pub fn id(&self) -> u64 {
         self.id
     }

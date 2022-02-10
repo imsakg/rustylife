@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 
 /// A daily habit. Check-ins are unique dates, not an incrementing counter.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Habit {
     id: u64,
     name: String,
@@ -47,6 +48,15 @@ impl Habit {
             archived: false,
             checkins: BTreeSet::new(),
         })
+    }
+    pub(crate) fn validate(&self) -> Result<()> {
+        if self.id == 0 || valid_name(&self.name)? != self.name {
+            return Err("invalid habit identity or name".into());
+        }
+        if self.checkins.iter().any(|d| *d < self.created) {
+            return Err("check-in predates habit creation".into());
+        }
+        Ok(())
     }
     pub fn id(&self) -> u64 {
         self.id
