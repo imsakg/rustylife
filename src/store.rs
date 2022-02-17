@@ -1,8 +1,110 @@
 use crate::{date::Date, goal::Goal, habit::Habit, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 
 pub const SCHEMA_VERSION: u32 = 1;
+pub const MAX_SNAPSHOT_BYTES: u64 = 16 * 1024 * 1024;
+
+/// Holds a nonblocking exclusive advisory lock for a complete read/edit/write cycle.
+/// Dropping this handle releases the lock, including on error or panic.
+pub struct Store {
+    path: PathBuf,
+    _lock: File,
+}
+impl Store {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        let name = path.file_name().ok_or("data path must name a file")?;
+        let parent = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        fs::create_dir_all(parent).map_err(|e| format!("create data directory: {e}"))?;
+        let parent = parent.canonicalize().map_err(|e| e.to_string())?;
+        let path = parent.join(name);
+        reject_symlink(&path)?;
+        let mut lock_name = name.to_os_string();
+        lock_name.push(".lock");
+        let lock_path = parent.join(lock_name);
+        reject_symlink(&lock_path)?;
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let lock = options
+            .open(lock_path)
+            .map_err(|e| format!("open data lock: {e}"))?;
+        fs2::FileExt::try_lock_exclusive(&lock)
+            .map_err(|e| format!("data store is busy or cannot be locked: {e}"))?;
+        Ok(Self { path, _lock: lock })
+    }
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+    pub fn read(&self) -> Result<State> {
+        reject_symlink(&self.path)?;
+        let file = match File::open(&self.path) {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(State::default()),
+            Err(e) => return Err(format!("open snapshot: {e}")),
+        };
+        let mut bytes = Vec::new();
+        file.take(MAX_SNAPSHOT_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("read snapshot: {e}"))?;
+        if bytes.len() as u64 > MAX_SNAPSHOT_BYTES {
+            return Err("snapshot exceeds the 16 MiB limit".into());
+        }
+        let text =
+            std::str::from_utf8(&bytes).map_err(|e| format!("snapshot is not UTF-8: {e}"))?;
+        State::from_json(text)
+    }
+    pub fn update<T>(&self, change: impl FnOnce(&mut State) -> Result<T>) -> Result<T> {
+        let mut state = self.read()?;
+        let output = change(&mut state)?;
+        write_snapshot(&self.path, &state)?;
+        Ok(output)
+    }
+}
+
+fn reject_symlink(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => {
+            Err(format!("refusing symbolic link: {}", path.display()))
+        }
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("inspect {}: {e}", path.display())),
+    }
+}
+fn write_snapshot(path: &Path, state: &State) -> Result<()> {
+    let text = state.to_json()?;
+    if text.len() as u64 > MAX_SNAPSHOT_BYTES {
+        return Err("snapshot exceeds the 16 MiB limit".into());
+    }
+    reject_symlink(path)?;
+    let parent = path.parent().ok_or("snapshot has no parent directory")?;
+    let mut temp = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|e| format!("create temporary snapshot: {e}"))?;
+    temp.write_all(text.as_bytes())
+        .map_err(|e| format!("write snapshot: {e}"))?;
+    temp.as_file()
+        .sync_all()
+        .map_err(|e| format!("sync snapshot: {e}"))?;
+    temp.persist(path)
+        .map_err(|e| format!("replace snapshot: {e}"))?;
+    #[cfg(unix)]
+    File::open(parent)
+        .and_then(|dir| dir.sync_all())
+        .map_err(|e| format!("sync data directory: {e}"))?;
+    Ok(())
+}
 
 /// Portable, versioned application state. IDs remain stable across reloads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
