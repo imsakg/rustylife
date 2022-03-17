@@ -11,6 +11,15 @@ habit undo ID                  Remove a mistaken check-in
 habit rename ID NAME           Rename without losing history
 habit archive ID | resume ID   Archive or resume a habit
 
+goal add NAME TARGET UNIT [DUE] Create a measurable goal
+ goal list                     Show goals, progress and milestones
+ goal advance ID AMOUNT        Add progress in whole units
+ goal set ID AMOUNT            Correct total progress
+ goal due ID DATE|none         Change or remove a deadline
+ goal milestone ID add NAME    Add a named milestone
+ goal milestone ID done N      Complete a one-based milestone
+ goal milestone ID undo N      Reopen a milestone
+
 Options must precede the command; quote names containing spaces.
 Data: --data, then RUSTYLIFE_DATA, then $XDG_DATA_HOME/rustylife/data.json
 (or $HOME/.local/share/rustylife/data.json). --on defaults to local today.
@@ -148,6 +157,94 @@ fn execute(store: &Store, words: &[&str], today: Date) -> Result<String> {
             store.update(|s| {
                 s.habit_mut(id)?.set_archived(*action == "archive");
                 Ok(format!("Updated habit {id}\n"))
+            })
+        }
+        ["goal", "list"] => {
+            let state = store.read()?;
+            let mut text = String::new();
+            for g in state.goals() {
+                text.push_str(&format!(
+                    "{}: {} — {}/{} {} ({:.0}%) [{}]{}\n",
+                    g.id(),
+                    g.name(),
+                    g.progress(),
+                    g.target(),
+                    g.unit(),
+                    g.percent(),
+                    g.status(today),
+                    g.due().map(|d| format!(" due {d}")).unwrap_or_default()
+                ));
+                for (i, m) in g.milestones().iter().enumerate() {
+                    text.push_str(&format!(
+                        "  [{}] {}: {}\n",
+                        if m.done() { "x" } else { " " },
+                        i + 1,
+                        m.name()
+                    ));
+                }
+            }
+            if text.is_empty() {
+                text.push_str("No goals. Add one with: goal add NAME TARGET UNIT\n");
+            }
+            Ok(text)
+        }
+        ["goal", "add", name, target, unit] | ["goal", "add", name, target, unit, _] => {
+            let target = id(target)?;
+            let due = words.get(5).map(|d| d.parse::<Date>()).transpose()?;
+            store.update(|s| {
+                let id = s.add_goal(name, target, unit, today)?;
+                s.goal_mut(id)?.set_due(due)?;
+                Ok(format!("Created goal {id}: {name}\n"))
+            })
+        }
+        ["goal", action @ ("advance" | "set"), value, amount] => {
+            let id = id(value)?;
+            let amount: u64 = amount
+                .parse()
+                .map_err(|_| "amount must be a nonnegative whole number")?;
+            store.update(|s| {
+                let goal = s.goal_mut(id)?;
+                if *action == "advance" {
+                    goal.advance(amount)?;
+                } else {
+                    goal.set_progress(amount)?;
+                }
+                Ok(format!(
+                    "Goal {id}: {}/{} {}\n",
+                    goal.progress(),
+                    goal.target(),
+                    goal.unit()
+                ))
+            })
+        }
+        ["goal", "due", value, due] => {
+            let id = id(value)?;
+            let due = if *due == "none" {
+                None
+            } else {
+                Some(due.parse::<Date>()?)
+            };
+            store.update(|s| {
+                s.goal_mut(id)?.set_due(due)?;
+                Ok(format!("Updated goal {id} deadline\n"))
+            })
+        }
+        ["goal", "milestone", value, "add", name] => {
+            let id = id(value)?;
+            store.update(|s| {
+                Ok(format!(
+                    "Added milestone {} to goal {id}\n",
+                    s.goal_mut(id)?.add_milestone(name)?
+                ))
+            })
+        }
+        ["goal", "milestone", value, action @ ("done" | "undo"), number] => {
+            let id = id(value)?;
+            let number =
+                usize::try_from(self::id(number)?).map_err(|_| "milestone number is too large")?;
+            store.update(|s| {
+                s.goal_mut(id)?.set_milestone(number, *action == "done")?;
+                Ok(format!("Updated milestone {number} on goal {id}\n"))
             })
         }
         _ => Err("unknown command or wrong arguments; run rustylife --help".into()),
