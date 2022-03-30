@@ -1,4 +1,4 @@
-use crate::{date::Date, store::Store, Result};
+use crate::{date::Date, store::Store, visual::progress_bar, Result};
 use std::path::PathBuf;
 
 pub const HELP: &str = "rustylife — local habits and goals
@@ -173,6 +173,10 @@ fn execute(store: &Store, words: &[&str], today: Date) -> Result<String> {
                     g.percent(),
                     g.status(today),
                     g.due().map(|d| format!(" due {d}")).unwrap_or_default()
+                ));
+                text.push_str(&format!(
+                    "  {}\n",
+                    progress_bar(g.progress(), g.target(), 20)
                 ));
                 for (i, m) in g.milestones().iter().enumerate() {
                     text.push_str(&format!(
