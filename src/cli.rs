@@ -7,6 +7,7 @@ Usage: rustylife [--data PATH] [--on YYYY-MM-DD] COMMAND
 habit add NAME                  Create a daily habit
 habit list [all]                List active habits, or include archived habits
 habit check ID                 Record the selected day (idempotent)
+habit calendar ID START END    Show a bounded check-in calendar
 habit undo ID                  Remove a mistaken check-in
 habit rename ID NAME           Rename without losing history
 habit archive ID | resume ID   Archive or resume a habit
@@ -111,6 +112,10 @@ fn execute(store: &Store, words: &[&str], today: Date) -> Result<String> {
                 lines.push_str("No habits. Add one with: habit add NAME\n");
             }
             Ok(lines)
+        }
+        ["habit", "calendar", value, start, end] => {
+            let state = store.read()?;
+            crate::visual::habit_calendar(state.habit(id(value)?)?, start.parse()?, end.parse()?)
         }
         ["habit", "add", name] => store.update(|s| {
             Ok(format!(
