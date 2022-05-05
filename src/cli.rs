@@ -4,6 +4,7 @@ use std::path::PathBuf;
 pub const HELP: &str = "rustylife — local habits and goals
 Usage: rustylife [--data PATH] [--on YYYY-MM-DD] COMMAND
 
+today                           Show the daily dashboard
 habit add NAME                  Create a daily habit
 habit list [all]                List active habits, or include archived habits
 habit check ID                 Record the selected day (idempotent)
@@ -91,6 +92,7 @@ fn id(value: &str) -> Result<u64> {
 }
 fn execute(store: &Store, words: &[&str], today: Date) -> Result<String> {
     match words {
+        ["today"] => Ok(crate::report::dashboard(&store.read()?, today)),
         ["habit", "list"] | ["habit", "list", "all"] => {
             let state = store.read()?;
             let all = words.len() == 3;

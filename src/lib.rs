@@ -5,6 +5,7 @@ pub mod cli;
 pub mod date;
 pub mod goal;
 pub mod habit;
+pub mod report;
 pub mod store;
 pub mod visual;
 
