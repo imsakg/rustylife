@@ -1,4 +1,57 @@
-use crate::{date::Date, store::State, visual::progress_bar};
+use crate::{date::Date, store::State, visual::progress_bar, Result};
+
+/// Rolling seven-day review through the reference day (inclusive).
+pub fn weekly(state: &State, through: Date) -> Result<String> {
+    let first = "0001-01-01".parse::<Date>()?;
+    window(
+        state,
+        through.add_days(-6).unwrap_or(first),
+        through,
+        "Weekly review",
+    )
+}
+
+fn window(state: &State, start: Date, end: Date, title: &str) -> Result<String> {
+    let mut text =
+        format!("{title} — {start} .. {end}\nHabit completion (current active habits)\n");
+    let (mut done, mut eligible) = (0_u64, 0_u64);
+    for h in state
+        .habits()
+        .iter()
+        .filter(|h| !h.is_archived() && h.created() <= end)
+    {
+        let c = h.completion(start, end)?;
+        done += c.completed as u64;
+        eligible += c.eligible as u64;
+        text.push_str(&format!(
+            "{}: {}/{} ({:.1}%) {}\n",
+            h.name(),
+            c.completed,
+            c.eligible,
+            c.percent(),
+            progress_bar(c.completed as u64, c.eligible as u64, 14)
+        ));
+    }
+    let percent = if eligible == 0 {
+        0.0
+    } else {
+        done as f64 * 100.0 / eligible as f64
+    };
+    text.push_str(&format!(
+        "Total: {done}/{eligible} ({percent:.1}%)\nGoals (current totals, not historical)\n"
+    ));
+    for g in state.goals().iter().filter(|g| g.created() <= end) {
+        text.push_str(&format!(
+            "{}: {}/{} {} [{}]\n",
+            g.name(),
+            g.progress(),
+            g.target(),
+            g.unit(),
+            g.status(end)
+        ));
+    }
+    Ok(text)
+}
 
 /// Render a deterministic overview. Reference dates do not rewind goal totals.
 pub fn dashboard(state: &State, today: Date) -> String {
