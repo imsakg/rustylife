@@ -6,6 +6,7 @@ Usage: rustylife [--data PATH] [--on YYYY-MM-DD] COMMAND
 
 today                           Show the daily dashboard
 report weekly                   Review the seven days ending on --on
+report monthly                  Review the calendar month through --on
 habit add NAME                  Create a daily habit
 habit list [all]                List active habits, or include archived habits
 habit check ID                 Record the selected day (idempotent)
@@ -93,6 +94,7 @@ fn id(value: &str) -> Result<u64> {
 }
 fn execute(store: &Store, words: &[&str], today: Date) -> Result<String> {
     match words {
+        ["report", "monthly"] => crate::report::monthly(&store.read()?, today),
         ["report", "weekly"] => crate::report::weekly(&store.read()?, today),
         ["today"] => Ok(crate::report::dashboard(&store.read()?, today)),
         ["habit", "list"] | ["habit", "list", "all"] => {

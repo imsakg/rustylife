@@ -11,6 +11,12 @@ pub fn weekly(state: &State, through: Date) -> Result<String> {
     )
 }
 
+/// Calendar month-to-date. Select the month's last day for a complete monthly review.
+pub fn monthly(state: &State, through: Date) -> Result<String> {
+    let start = format!("{:04}-{:02}-01", through.year(), through.month()).parse::<Date>()?;
+    window(state, start, through, "Monthly review")
+}
+
 fn window(state: &State, start: Date, end: Date, title: &str) -> Result<String> {
     let mut text =
         format!("{title} — {start} .. {end}\nHabit completion (current active habits)\n");
