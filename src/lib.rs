@@ -3,6 +3,7 @@
 
 pub mod cli;
 pub mod date;
+pub mod export;
 pub mod goal;
 pub mod habit;
 pub mod report;

@@ -24,6 +24,8 @@ goal add NAME TARGET UNIT [DUE] Create a measurable goal
  goal milestone ID done N      Complete a one-based milestone
  goal milestone ID undo N      Reopen a milestone
 
+export habits | goals          Write analysis CSV to stdout
+
 Options must precede the command; quote names containing spaces.
 Data: --data, then RUSTYLIFE_DATA, then $XDG_DATA_HOME/rustylife/data.json
 (or $HOME/.local/share/rustylife/data.json). --on defaults to local today.
@@ -94,6 +96,8 @@ fn id(value: &str) -> Result<u64> {
 }
 fn execute(store: &Store, words: &[&str], today: Date) -> Result<String> {
     match words {
+        ["export", "habits"] => Ok(crate::export::habit_csv(&store.read()?)),
+        ["export", "goals"] => Ok(crate::export::goal_csv(&store.read()?, today)),
         ["report", "monthly"] => crate::report::monthly(&store.read()?, today),
         ["report", "weekly"] => crate::report::weekly(&store.read()?, today),
         ["today"] => Ok(crate::report::dashboard(&store.read()?, today)),
