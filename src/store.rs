@@ -48,29 +48,61 @@ impl Store {
         &self.path
     }
     pub fn read(&self) -> Result<State> {
-        reject_symlink(&self.path)?;
-        let file = match File::open(&self.path) {
-            Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(State::default()),
-            Err(e) => return Err(format!("open snapshot: {e}")),
-        };
-        let mut bytes = Vec::new();
-        file.take(MAX_SNAPSHOT_BYTES + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|e| format!("read snapshot: {e}"))?;
-        if bytes.len() as u64 > MAX_SNAPSHOT_BYTES {
-            return Err("snapshot exceeds the 16 MiB limit".into());
+        read_snapshot(&self.path, true)
+    }
+    /// Creates a new backup; existing destinations are never overwritten.
+    pub fn backup(&self, destination: impl AsRef<Path>) -> Result<()> {
+        let path = absolute_target(destination.as_ref())?;
+        if path == self.path {
+            return Err("backup destination is the active data file".into());
         }
-        let text =
-            std::str::from_utf8(&bytes).map_err(|e| format!("snapshot is not UTF-8: {e}"))?;
-        State::from_json(text)
+        write_snapshot(&path, &self.read()?, false)
+    }
+    /// Replace the active snapshot with an independently validated backup.
+    pub fn restore(&self, source: impl AsRef<Path>) -> Result<()> {
+        let path = absolute_target(source.as_ref())?;
+        if path == self.path {
+            return Err("restore source is the active data file".into());
+        }
+        let state = read_snapshot(&path, false)?;
+        write_snapshot(&self.path, &state, true)
     }
     pub fn update<T>(&self, change: impl FnOnce(&mut State) -> Result<T>) -> Result<T> {
         let mut state = self.read()?;
         let output = change(&mut state)?;
-        write_snapshot(&self.path, &state)?;
+        write_snapshot(&self.path, &state, true)?;
         Ok(output)
     }
+}
+fn absolute_target(path: &Path) -> Result<PathBuf> {
+    let name = path.file_name().ok_or("snapshot path must name a file")?;
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    Ok(parent
+        .canonicalize()
+        .map_err(|e| format!("snapshot directory: {e}"))?
+        .join(name))
+}
+fn read_snapshot(path: &Path, missing_is_empty: bool) -> Result<State> {
+    reject_symlink(path)?;
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(e) if missing_is_empty && e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(State::default())
+        }
+        Err(e) => return Err(format!("open snapshot: {e}")),
+    };
+    let mut bytes = Vec::new();
+    file.take(MAX_SNAPSHOT_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("read snapshot: {e}"))?;
+    if bytes.len() as u64 > MAX_SNAPSHOT_BYTES {
+        return Err("snapshot exceeds the 16 MiB limit".into());
+    }
+    let text = std::str::from_utf8(&bytes).map_err(|e| format!("snapshot is not UTF-8: {e}"))?;
+    State::from_json(text)
 }
 
 fn reject_symlink(path: &Path) -> Result<()> {
@@ -83,7 +115,7 @@ fn reject_symlink(path: &Path) -> Result<()> {
         Err(e) => Err(format!("inspect {}: {e}", path.display())),
     }
 }
-fn write_snapshot(path: &Path, state: &State) -> Result<()> {
+fn write_snapshot(path: &Path, state: &State, overwrite: bool) -> Result<()> {
     let text = state.to_json()?;
     if text.len() as u64 > MAX_SNAPSHOT_BYTES {
         return Err("snapshot exceeds the 16 MiB limit".into());
@@ -97,8 +129,13 @@ fn write_snapshot(path: &Path, state: &State) -> Result<()> {
     temp.as_file()
         .sync_all()
         .map_err(|e| format!("sync snapshot: {e}"))?;
-    temp.persist(path)
-        .map_err(|e| format!("replace snapshot: {e}"))?;
+    if overwrite {
+        temp.persist(path)
+            .map_err(|e| format!("replace snapshot: {e}"))?;
+    } else {
+        temp.persist_noclobber(path)
+            .map_err(|e| format!("create backup without overwriting: {e}"))?;
+    }
     #[cfg(unix)]
     File::open(parent)
         .and_then(|dir| dir.sync_all())

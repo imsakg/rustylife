@@ -26,6 +26,9 @@ goal add NAME TARGET UNIT [DUE] Create a measurable goal
 
 export habits | goals          Write analysis CSV to stdout
 
+backup PATH                    Create a new non-overwriting JSON backup
+restore PATH --replace         Replace live data with a validated backup
+
 Options must precede the command; quote names containing spaces.
 Data: --data, then RUSTYLIFE_DATA, then $XDG_DATA_HOME/rustylife/data.json
 (or $HOME/.local/share/rustylife/data.json). --on defaults to local today.
@@ -96,6 +99,14 @@ fn id(value: &str) -> Result<u64> {
 }
 fn execute(store: &Store, words: &[&str], today: Date) -> Result<String> {
     match words {
+        ["backup", destination] => {
+            store.backup(destination)?;
+            Ok(format!("Backup saved to {destination}\n"))
+        }
+        ["restore", source, "--replace"] => {
+            store.restore(source)?;
+            Ok(format!("Restored from {source}\n"))
+        }
         ["export", "habits"] => Ok(crate::export::habit_csv(&store.read()?)),
         ["export", "goals"] => Ok(crate::export::goal_csv(&store.read()?, today)),
         ["report", "monthly"] => crate::report::monthly(&store.read()?, today),
