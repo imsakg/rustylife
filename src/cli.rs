@@ -9,6 +9,8 @@ report weekly                   Review the seven days ending on --on
 report monthly                  Review the calendar month through --on
 habit add NAME                  Create a daily habit
 habit list [all]                List active habits, or include archived habits
+habit category ID NAME|none     Assign or remove a category
+habit list category NAME        Filter active habits by exact category
 habit check ID                 Record the selected day (idempotent)
 habit calendar ID START END    Show a bounded check-in calendar
 habit undo ID                  Remove a mistaken check-in
@@ -112,11 +114,30 @@ fn execute(store: &Store, words: &[&str], today: Date) -> Result<String> {
         ["report", "monthly"] => crate::report::monthly(&store.read()?, today),
         ["report", "weekly"] => crate::report::weekly(&store.read()?, today),
         ["today"] => Ok(crate::report::dashboard(&store.read()?, today)),
-        ["habit", "list"] | ["habit", "list", "all"] => {
+        ["habit", "category", value, category] => {
+            let id = id(value)?;
+            let category = if *category == "none" {
+                None
+            } else {
+                Some(*category)
+            };
+            store.update(|s| {
+                s.habit_mut(id)?.set_category(category)?;
+                Ok(format!("Updated habit {id} category\n"))
+            })
+        }
+        ["habit", "list"] | ["habit", "list", "all"] | ["habit", "list", "category", _] => {
             let state = store.read()?;
-            let all = words.len() == 3;
+            let all = words == ["habit", "list", "all"];
+            let category = if words.len() == 4 {
+                Some(words[3])
+            } else {
+                None
+            };
             let mut lines = String::new();
-            for h in state.habits().iter().filter(|h| all || !h.is_archived()) {
+            for h in state.habits().iter().filter(|h| {
+                (all || !h.is_archived()) && category.is_none_or(|c| h.category() == Some(c))
+            }) {
                 lines.push_str(&format!(
                     "{}: {} [{}] — {} check-ins\n",
                     h.id(),

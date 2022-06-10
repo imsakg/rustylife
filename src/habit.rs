@@ -10,6 +10,8 @@ pub struct Habit {
     name: String,
     created: Date,
     archived: bool,
+    #[serde(default)]
+    category: Option<String>,
     checkins: BTreeSet<Date>,
 }
 
@@ -46,6 +48,7 @@ impl Habit {
             name: valid_name(name)?,
             created,
             archived: false,
+            category: None,
             checkins: BTreeSet::new(),
         })
     }
@@ -53,9 +56,21 @@ impl Habit {
         if self.id == 0 || valid_name(&self.name)? != self.name {
             return Err("invalid habit identity or name".into());
         }
+        if let Some(category) = &self.category {
+            if valid_name(category)? != *category {
+                return Err("invalid habit category".into());
+            }
+        }
         if self.checkins.iter().any(|d| *d < self.created) {
             return Err("check-in predates habit creation".into());
         }
+        Ok(())
+    }
+    pub fn category(&self) -> Option<&str> {
+        self.category.as_deref()
+    }
+    pub fn set_category(&mut self, category: Option<&str>) -> Result<()> {
+        self.category = category.map(valid_name).transpose()?;
         Ok(())
     }
     pub fn id(&self) -> u64 {
