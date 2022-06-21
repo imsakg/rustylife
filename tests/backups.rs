@@ -4,7 +4,7 @@ fn backups_are_validated_nonclobbering_and_restore_can_recover_corruption() {
     let dir = tempfile::tempdir().unwrap();
     let p = dir.path().join("data.json");
     let backup = dir.path().join("backup.json");
-    let store = Store::open(&p).unwrap();
+    let mut store = Store::open(&p).unwrap();
     store
         .update(|s| s.add_habit("Read", "2021-09-01".parse().unwrap()))
         .unwrap();

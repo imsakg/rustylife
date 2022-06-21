@@ -72,8 +72,8 @@ pub fn run(args: &[String]) -> Result<String> {
         Some(path) => path,
         None => default_path()?,
     };
-    let store = Store::open(path)?;
-    execute(&store, &words, today.unwrap_or_else(Date::today))
+    let mut store = Store::open(path)?;
+    execute(&mut store, &words, today.unwrap_or_else(Date::today))
 }
 fn default_path() -> Result<PathBuf> {
     if let Some(path) = std::env::var_os("RUSTYLIFE_DATA") {
@@ -99,7 +99,7 @@ fn id(value: &str) -> Result<u64> {
     }
     Ok(id)
 }
-fn execute(store: &Store, words: &[&str], today: Date) -> Result<String> {
+fn execute(store: &mut Store, words: &[&str], today: Date) -> Result<String> {
     match words {
         ["backup", destination] => {
             store.backup(destination)?;

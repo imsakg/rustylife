@@ -14,6 +14,11 @@ pub struct Store {
     path: PathBuf,
     _lock: File,
 }
+impl Drop for Store {
+    fn drop(&mut self) {
+        let _ = fs2::FileExt::unlock(&self._lock);
+    }
+}
 impl Store {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
@@ -35,11 +40,16 @@ impl Store {
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
+            options
+                .mode(0o600)
+                .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
         }
         let lock = options
             .open(lock_path)
             .map_err(|e| format!("open data lock: {e}"))?;
+        if !lock.metadata().map_err(|e| e.to_string())?.is_file() {
+            return Err("lock path is not a regular file".into());
+        }
         fs2::FileExt::try_lock_exclusive(&lock)
             .map_err(|e| format!("data store is busy or cannot be locked: {e}"))?;
         Ok(Self { path, _lock: lock })
@@ -59,7 +69,7 @@ impl Store {
         write_snapshot(&path, &self.read()?, false)
     }
     /// Replace the active snapshot with an independently validated backup.
-    pub fn restore(&self, source: impl AsRef<Path>) -> Result<()> {
+    pub fn restore(&mut self, source: impl AsRef<Path>) -> Result<()> {
         let path = absolute_target(source.as_ref())?;
         if path == self.path {
             return Err("restore source is the active data file".into());
@@ -67,7 +77,15 @@ impl Store {
         let state = read_snapshot(&path, false)?;
         write_snapshot(&self.path, &state, true)
     }
-    pub fn update<T>(&self, change: impl FnOnce(&mut State) -> Result<T>) -> Result<T> {
+    /// Requires exclusive access, so two threads cannot race via one Store handle.
+    ///
+    /// ```compile_fail
+    /// use rustylife::store::Store;
+    /// use std::sync::Arc;
+    /// let shared = Arc::new(Store::open("data.json").unwrap());
+    /// shared.update(|_| Ok(())); // Arc does not provide exclusive mutable access.
+    /// ```
+    pub fn update<T>(&mut self, change: impl FnOnce(&mut State) -> Result<T>) -> Result<T> {
         let mut state = self.read()?;
         let output = change(&mut state)?;
         write_snapshot(&self.path, &state, true)?;
@@ -87,13 +105,23 @@ fn absolute_target(path: &Path) -> Result<PathBuf> {
 }
 fn read_snapshot(path: &Path, missing_is_empty: bool) -> Result<State> {
     reject_symlink(path)?;
-    let file = match File::open(path) {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let file = match options.open(path) {
         Ok(file) => file,
         Err(e) if missing_is_empty && e.kind() == std::io::ErrorKind::NotFound => {
             return Ok(State::default())
         }
         Err(e) => return Err(format!("open snapshot: {e}")),
     };
+    if !file.metadata().map_err(|e| e.to_string())?.is_file() {
+        return Err("snapshot is not a regular file".into());
+    }
     let mut bytes = Vec::new();
     file.take(MAX_SNAPSHOT_BYTES + 1)
         .read_to_end(&mut bytes)
@@ -110,6 +138,7 @@ fn reject_symlink(path: &Path) -> Result<()> {
         Ok(meta) if meta.file_type().is_symlink() => {
             Err(format!("refusing symbolic link: {}", path.display()))
         }
+        Ok(meta) if !meta.is_file() => Err(format!("not a regular file: {}", path.display())),
         Ok(_) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(format!("inspect {}: {e}", path.display())),

@@ -27,3 +27,6 @@ fs2 = "0.4"
 tempfile = "3"
 rand = { version = "0.8.5", optional = true }
 raylib4-sys = { version = "0.1.2", optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
