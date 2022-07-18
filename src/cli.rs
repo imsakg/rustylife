@@ -18,13 +18,13 @@ habit rename ID NAME           Rename without losing history
 habit archive ID | resume ID   Archive or resume a habit
 
 goal add NAME TARGET UNIT [DUE] Create a measurable goal
- goal list                     Show goals, progress and milestones
- goal advance ID AMOUNT        Add progress in whole units
- goal set ID AMOUNT            Correct total progress
- goal due ID DATE|none         Change or remove a deadline
- goal milestone ID add NAME    Add a named milestone
- goal milestone ID done N      Complete a one-based milestone
- goal milestone ID undo N      Reopen a milestone
+goal list                     Show goals, progress and milestones
+goal advance ID AMOUNT        Add progress in whole units
+goal set ID AMOUNT            Correct total progress
+goal due ID DATE|none         Change or remove a deadline
+goal milestone ID add NAME    Add a named milestone
+goal milestone ID done N      Complete a one-based milestone
+goal milestone ID undo N      Reopen a milestone
 
 export habits | goals          Write analysis CSV to stdout
 
