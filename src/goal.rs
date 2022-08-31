@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// A measurable goal using whole units; progress is always within its target.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(try_from = "RawGoal")]
 pub struct Goal {
     id: u64,
     name: String,
@@ -31,7 +31,7 @@ impl std::fmt::Display for GoalStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(try_from = "RawMilestone")]
 pub struct Milestone {
     name: String,
     done: bool,
@@ -42,6 +42,54 @@ impl Milestone {
     }
     pub fn done(&self) -> bool {
         self.done
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawGoal {
+    id: u64,
+    name: String,
+    target: u64,
+    progress: u64,
+    unit: String,
+    created: Date,
+    due: Option<Date>,
+    milestones: Vec<Milestone>,
+}
+impl TryFrom<RawGoal> for Goal {
+    type Error = String;
+    fn try_from(raw: RawGoal) -> Result<Self> {
+        let goal = Self {
+            id: raw.id,
+            name: raw.name,
+            target: raw.target,
+            progress: raw.progress,
+            unit: raw.unit,
+            created: raw.created,
+            due: raw.due,
+            milestones: raw.milestones,
+        };
+        goal.validate()?;
+        Ok(goal)
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawMilestone {
+    name: String,
+    done: bool,
+}
+impl TryFrom<RawMilestone> for Milestone {
+    type Error = String;
+    fn try_from(raw: RawMilestone) -> Result<Self> {
+        if valid_name(&raw.name)? != raw.name {
+            return Err("invalid milestone name".into());
+        }
+        Ok(Self {
+            name: raw.name,
+            done: raw.done,
+        })
     }
 }
 

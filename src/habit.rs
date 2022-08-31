@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 /// A daily habit. Check-ins are unique dates, not an incrementing counter.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(try_from = "RawHabit")]
 pub struct Habit {
     id: u64,
     name: String,
@@ -13,6 +13,37 @@ pub struct Habit {
     #[serde(default)]
     category: Option<String>,
     checkins: BTreeSet<Date>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawHabit {
+    id: u64,
+    name: String,
+    created: Date,
+    archived: bool,
+    #[serde(default)]
+    category: Option<String>,
+    checkins: Vec<Date>,
+}
+impl TryFrom<RawHabit> for Habit {
+    type Error = String;
+    fn try_from(raw: RawHabit) -> Result<Self> {
+        let count = raw.checkins.len();
+        let habit = Self {
+            id: raw.id,
+            name: raw.name,
+            created: raw.created,
+            archived: raw.archived,
+            category: raw.category,
+            checkins: raw.checkins.into_iter().collect(),
+        };
+        if habit.checkins.len() != count {
+            return Err("duplicate check-in dates in snapshot".into());
+        }
+        habit.validate()?;
+        Ok(habit)
+    }
 }
 
 pub(crate) fn valid_name(name: &str) -> Result<String> {

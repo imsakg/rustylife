@@ -174,13 +174,36 @@ fn write_snapshot(path: &Path, state: &State, overwrite: bool) -> Result<()> {
 
 /// Portable, versioned application state. IDs remain stable across reloads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(try_from = "RawState")]
 pub struct State {
     schema_version: u32,
     next_habit_id: u64,
     next_goal_id: u64,
     habits: Vec<Habit>,
     goals: Vec<Goal>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawState {
+    schema_version: u32,
+    next_habit_id: u64,
+    next_goal_id: u64,
+    habits: Vec<Habit>,
+    goals: Vec<Goal>,
+}
+impl TryFrom<RawState> for State {
+    type Error = String;
+    fn try_from(raw: RawState) -> Result<Self> {
+        let state = Self {
+            schema_version: raw.schema_version,
+            next_habit_id: raw.next_habit_id,
+            next_goal_id: raw.next_goal_id,
+            habits: raw.habits,
+            goals: raw.goals,
+        };
+        state.validate()?;
+        Ok(state)
+    }
 }
 impl Default for State {
     fn default() -> Self {

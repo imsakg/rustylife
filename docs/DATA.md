@@ -19,7 +19,10 @@ the same invariants as CLI inputs. JSON numbers must be exact integers, not floa
 
 Prefer application backups and explicit restore over hand-editing. Public domain
 fields are private so normal library mutations preserve these invariants. The
-`State::from_json`/`to_json` boundary validates complete snapshots. No automatic
+`State::from_json`/`to_json` boundary validates complete snapshots. Public Serde
+deserialization also uses validated private wire representations, including direct
+`Habit`, `Goal`, `Milestone` and `State` inputs. Duplicate date entries are rejected
+rather than silently deduplicated. No automatic
 schema migrations or lossy “best effort” imports are performed.
 
 ## Update protocol
