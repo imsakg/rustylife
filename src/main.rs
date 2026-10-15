@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+#![allow(unused_imports, dead_code)]
 use rand::distributions::{Distribution, Uniform};
 use rand::Rng;
 use raylib4_sys::*;
@@ -18,6 +18,7 @@ fn rand() -> f32 {
     let mut rng = rand::thread_rng();
     step.sample(&mut rng)
 }
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let factor: f32 = 100_f32;
     let screen_width: f32 = 16_f32 * factor;
@@ -69,6 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             state[1].texture,
             TextureFilter_TEXTURE_FILTER_BILINEAR as i32,
         );
+
         // check "../../smoothlife.fs" exists
 
         if !Path::exists(Path::new("smoothlife.fs")) {
@@ -78,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let f_n = CString::new("smoothlife.fs").unwrap();
         let f_nptr = f_n.as_ptr();
 
-        let shader: Shader = LoadShader(std::ptr::null() as *const i8, f_nptr as *const i8);
+        let shader: Shader = LoadShader(std::ptr::null(), f_nptr);
 
         let resolution: Vector2 = Vector2 {
             x: texture_width,
@@ -88,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let res_n = CString::new("resolution").unwrap();
         let res_nptr = res_n.as_ptr();
 
-        let resolution_loc: i32 = GetShaderLocation(shader, res_nptr as *const i8);
+        let resolution_loc: i32 = GetShaderLocation(shader, res_nptr);
         SetShaderValue(
             shader,
             resolution_loc,
